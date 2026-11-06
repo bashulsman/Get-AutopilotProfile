@@ -1,85 +1,87 @@
-# Autopilot check op een Windows To Go-stick (Rufus)
+# Autopilot check on a Windows To Go stick (Rufus)
 
-Een USB-stick waarvan je een pc opstart om direct te zien of en in welke tenant die pc in Autopilot staat. Er wordt niets op de interne schijf van die pc gewijzigd.
+🇳🇱 [Nederlandse versie](README-WindowsToGo.nl.md)
 
-## Bestanden
+A USB stick you boot a PC from to see straight away whether, and in which tenant, that PC is registered in Autopilot. Nothing on the PC's internal disk is changed.
 
-| Bestand | Waar draaien | Doel |
+## Files
+
+| File | Run where | Purpose |
 |---|---|---|
-| `Prepare-WtgStick.ps1` | **Je eigen pc**, stick erin | Zet de tool op een met Rufus gemaakte stick en laat hem zichzelf installeren bij de eerste opstart |
-| `Install-WtgAutopilotCheck.ps1` | Op de stick (normaal automatisch) | Maakt de logon-taak, de bureaubladsnelkoppeling en de energie-instellingen |
-| `Start-AutopilotCheck.ps1` | Op de stick (automatisch na inloggen) | Wacht op internet en start daarna `Get-AutopilotProfile.ps1 -Gui` |
-| `Reset-AutopilotProbeState.ps1` | Op de stick | Wist de gecachete marker/ticket/device identity: altijd clean beginnen |
+| `Prepare-WtgStick.ps1` | **Your own PC**, stick plugged in | Puts the tool on a Rufus-made stick and makes it install itself on the stick's first boot |
+| `Install-WtgAutopilotCheck.ps1` | On the stick (normally automatic) | Creates the logon task, desktop shortcut and power settings |
+| `Start-AutopilotCheck.ps1` | On the stick (automatic after logon) | Waits for internet, then runs `Get-AutopilotProfile.ps1 -Gui` |
+| `Reset-AutopilotProbeState.ps1` | On the stick | Clears the cached marker/ticket/device identity: always a clean start |
 
-## 1. Stick maken met Rufus
+## 1. Create the stick with Rufus
 
-- Een **snelle** USB-stick/SSD van ≥ 64 GB (een USB 3.x SSD wordt sterk aangeraden)
-- Een Windows 11 Enterprise/Pro-ISO
+- A **fast** USB stick/SSD of ≥ 64 GB (a USB 3.x SSD is strongly recommended)
+- A Windows 11 Enterprise/Pro ISO
 - Rufus → *Image option*: **Windows To Go**
-- Vink in het dialoogvenster "Windows User Experience" aan:
+- In the "Windows User Experience" dialog, tick:
   - **Prevent Windows To Go from accessing internal disks**
   - **Remove requirement for an online Microsoft account**
-  - **Create a local account using username:** bv. `apcheck`
+  - **Create a local account using username:** e.g. `apcheck`
   - **Disable BitLocker automatic device encryption**
 
-## 2. Stick klaarzetten (op je eigen pc)
+## 2. Prepare the stick (on your own PC)
 
-Laat de stick na Rufus in je pc zitten en voer **als administrator** uit:
+Leave the stick plugged in after Rufus and run, **as administrator**:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\WindowsToGo\Prepare-WtgStick.ps1
 ```
 
-Het script zoekt zelf de Windows-partitie van de stick: een USB-schijf met een Windows-installatie, die niet je eigen systeemschijf is. Vindt het er meerdere, of heeft de partitie geen schijfletter, geef dan `-DriveLetter E` mee. Er wordt **niets geformatteerd**. Het script:
+The script finds the stick's Windows partition by itself: a USB disk with a Windows installation that is not your own system drive. If it finds more than one, or the partition has no drive letter, pass `-DriveLetter E`. **Nothing is formatted.** The script:
 
-- kopieert de tool naar `X:\AutopilotCheck` (elke keer een schone kopie)
-- voegt aan `X:\Windows\Setup\Scripts\SetupComplete.cmd` een regel toe die de installatie start
-- zet `Install Autopilot check.cmd` op het openbare bureaublad, als terugvaloptie
+- copies the tool to `X:\AutopilotCheck` (a clean copy every time)
+- adds a line to `X:\Windows\Setup\Scripts\SetupComplete.cmd` that starts the installation
+- puts `Install Autopilot check.cmd` on the Public desktop as a fallback
 
-Je kunt het script opnieuw draaien om een nieuwere versie van de tool op de stick te zetten.
+Run the script again to put a newer version of the tool on the stick.
 
-## 3. Eerste opstart van de stick
+## 3. First boot of the stick
 
-1. Boot een pc van de stick (F12/boot-menu; Secure Boot mag aan blijven) en rond de eerste setup af.
-2. Normaal installeert `SetupComplete.cmd` de tool vanzelf.
-3. Zie je na het inloggen toch de snelkoppeling **Install Autopilot check** op het bureaublad? Dubbelklik er dan één keer op en bevestig de UAC-vraag. Dat gebeurt als de stick al eerder is opgestart, of als Windows `SetupComplete.cmd` heeft overgeslagen. Dat laatste doet Windows bijvoorbeeld als de pc een OEM-productsleutel in de firmware heeft. Na de installatie verdwijnt de snelkoppeling.
-4. Optioneel automatisch inloggen (alleen op een stick die je alleen voor deze check gebruikt):
+1. Boot a PC from the stick (F12/boot menu; Secure Boot can stay on) and finish the first setup.
+2. Normally `SetupComplete.cmd` installs the tool by itself.
+3. Do you still see the **Install Autopilot check** shortcut on the desktop after logging on? Double-click it once and confirm the UAC prompt. This happens when the stick was booted before, or when Windows skipped `SetupComplete.cmd` — for example when the PC has an OEM product key in its firmware. The shortcut disappears after installation.
+4. Optional automatic logon (only on a stick used just for this check):
 
    ```powershell
    powershell -ExecutionPolicy Bypass -File C:\AutopilotCheck\WindowsToGo\Install-WtgAutopilotCheck.ps1 -AutoLogon
    ```
 
-Installatielogs staan in `C:\ProgramData\AutopilotProbe\install-*.log`.
+Installation logs are in `C:\ProgramData\AutopilotProbe\install-*.log`.
 
-## 4. Gebruik
+## 4. Usage
 
-1. Steek de stick in de pc die je wilt controleren en boot ervan.
-2. Log in (of automatisch). Na ~10 s verschijnt het venster *Waiting for internet*. Sluit een netwerkkabel aan of kies wifi; het wifi-scherm gaat vanzelf open.
-3. Het resultaat verschijnt in het venster (Registered/Not registered/Unknown, met tenant en profiel).
-4. Nog een keer uitvoeren: snelkoppeling **Autopilot check** op het bureaublad (vraagt om UAC).
+1. Plug the stick into the PC you want to check and boot from it.
+2. Log on (or automatically). After ~10 s the *Waiting for internet* window appears. Plug in a network cable or pick Wi-Fi; the Wi-Fi settings open by themselves.
+3. The result appears in the window (Registered/Not registered/Unknown, with tenant and profile).
+4. To run it again: the **Autopilot check** shortcut on the desktop (asks for UAC).
 
-**Is de controle echt online uitgevoerd?** Kijk in `C:\ProgramData\AutopilotProbe\`. Alleen een run die de dienst echt heeft bereikt, heeft een regel `HTTP <code>` in `autopilot-*.log` en een bestand `autopilot-*-response.json` met het antwoord van Microsoft.
+**Did the check really go online?** Look in `C:\ProgramData\AutopilotProbe\`. Only a run that actually reached the service has an `HTTP <code>` line in `autopilot-*.log` and an `autopilot-*-response.json` file with Microsoft's response.
 
-Bij **HTTP 401** (ticket verlopen) of **"No device ticket"** start je de pc via de stick opnieuw op, met netwerk, en probeer je het nog eens.
+On **HTTP 401** (ticket expired) or **"No device ticket"**, reboot the PC from the stick, with network, and try again.
 
-## Wisselen van pc: verouderde gegevens
+## Switching PCs: stale data
 
-De check gebruikt de **AutopilotMarker** en het **serienummer** uit `HKLM\SOFTWARE\Microsoft\Provisioning\HardwareInfo`, plus het MSA-**device ticket** van SYSTEM. Zijn die nog van een vorige pc, dan meldt `Get-AutopilotProfile.ps1` **Unknown** ("Cached hardware info belongs to another device"). Een verkeerde tenant krijg je dan dus niet te zien.
+The check uses the **AutopilotMarker** and **serial number** from `HKLM\SOFTWARE\Microsoft\Provisioning\HardwareInfo`, plus SYSTEM's MSA **device ticket**. If these still belong to a previous PC, `Get-AutopilotProfile.ps1` reports **Unknown** ("Cached hardware info belongs to another device"). So you never see a wrong tenant.
 
-Getest op een Entra-joined pc: na het wissen maakte Windows `HardwareInfo` binnen enkele seconden opnieuw aan, met **dezelfde** marker. De marker is dus van de hardware afgeleid. Op de stick verwacht ik daarom dat hij per pc goed wordt opgebouwd. **Test dit op twee verschillende pc's** voordat je de stick in gebruik neemt.
+Tested on an Entra-joined PC: after clearing, Windows re-created `HardwareInfo` within seconds, with the **same** marker. The marker is therefore derived from the hardware, so on the stick I expect it to be rebuilt correctly per PC. **Test this on two different PCs** before putting the stick into use.
 
-### Clean beginnen: `Reset-AutopilotProbeState.ps1`
+### Clean start: `Reset-AutopilotProbeState.ps1`
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File C:\AutopilotCheck\WindowsToGo\Reset-AutopilotProbeState.ps1
 ```
 
-Draai dit als administrator; het script start zichzelf daarna opnieuw als SYSTEM. Er wordt **geen back-up** gemaakt. Het wist:
+Run as administrator; the script then relaunches itself as SYSTEM. **No backup** is made. It clears:
 
 - `HardwareInfo`
 - `AutopilotPolicyCache`
-- de device tickets en de MSA device identity van SYSTEM
+- SYSTEM's device tickets and MSA device identity
 
-Daarna start het `wlidsvc` opnieuw. Herstart vervolgens met netwerk. Met `-WhatIf` zie je alleen wat er gewist zou worden; met `-KeepDeviceIdentity` blijft de MSA device identity staan.
+Then it restarts `wlidsvc`. Reboot with network afterwards. `-WhatIf` only shows what would be cleared; `-KeepDeviceIdentity` leaves the MSA device identity in place.
 
-**Beveiliging:** op een pc die Entra-joined, AD domain-joined of in Intune/MDM geënrolld is, weigert het script te draaien (exit code 3, er wordt niets gewijzigd), tenzij je `-Force` meegeeft. De stick heeft een lokaal account en valt hier dus niet onder.
+**Safety:** on a PC that is Entra-joined, AD domain-joined or Intune/MDM-enrolled, the script refuses to run (exit code 3, nothing is changed) unless you pass `-Force`. The stick uses a local account, so it is not affected.
