@@ -1,7 +1,5 @@
 # Autopilot check on a Windows To Go stick (Rufus)
 
-🇳🇱 [Nederlandse versie](README-WindowsToGo.nl.md)
-
 A USB stick you boot a PC from to see straight away whether, and in which tenant, that PC is registered in Autopilot. Nothing on the PC's internal disk is changed.
 
 ## Files
