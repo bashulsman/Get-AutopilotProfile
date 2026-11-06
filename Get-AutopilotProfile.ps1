@@ -79,8 +79,17 @@ function Invoke-Check {
         if(Test-Path $base){$keys+=Get-ChildItem $base -EA SilentlyContinue | Where-Object { $_.PSChildName -ne '{8A6E5826-EA01-989D-989D-158EE04D1518}' }}
         foreach($k in $keys){ $pp=Get-ItemProperty $k.PSPath -EA SilentlyContinue; if($pp.DeviceTicket){ $ticket=Get-Jwt ([byte[]]$pp.DeviceTicket); if($ticket){break} } }
 
-        $marker=(Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Provisioning\HardwareInfo' -EA SilentlyContinue).AutopilotMarker
-        Log ("Ticket present: {0}  Marker: {1}" -f [bool]$ticket, $marker)
+        $hwInfo=Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Provisioning\HardwareInfo' -EA SilentlyContinue
+        $marker=$hwInfo.AutopilotMarker
+        Log ("Ticket present: {0}  Marker: {1}  Cached serial: {2}  Live serial: {3}" -f [bool]$ticket, $marker, $hwInfo.SerialNumber, $r.SerialNumber)
+
+        # Stale-hardware guard (e.g. Windows To Go / a disk moved to another PC): the marker is cached
+        # for the hardware Windows was provisioned on. If that is not this PC, the answer would be about
+        # the OTHER device - refuse instead of returning a misleading result.
+        if ($hwInfo.SerialNumber -and $r.SerialNumber -and ($hwInfo.SerialNumber.Trim() -ne $r.SerialNumber.Trim())) {
+            $r.Detail="Cached hardware info belongs to another device (serial $($hwInfo.SerialNumber), this PC is $($r.SerialNumber)). The Autopilot marker/ticket are stale, so no reliable result for this PC."
+            Log $r.Detail; return $r
+        }
 
         if (-not $ticket) { $r.Detail='No device ticket. Run as SYSTEM on a running Windows (not WinPE/OOBE), with network.'; Log $r.Detail; return $r }
         if (-not $marker) { $r.Detail='No Autopilot marker (HardwareInfo\AutopilotMarker). Device may never have been Autopilot-provisioned.'; Log $r.Detail; return $r }
