@@ -23,11 +23,17 @@ Want a read-only stick that starts clean on every boot, with a separate writable
 - A Windows 11 Enterprise/Pro ISO
 - **USB SSD not listed in Rufus?** Rufus hides USB hard drives/SSDs by default. Press **Alt+F** in Rufus to list them, or open *Show advanced drive properties* and tick **List USB Hard Drives**. Double-check you picked the stick: Rufus wipes the whole disk.
 - Rufus → *Image option*: **Windows To Go**
-- In the "Windows User Experience" dialog, tick:
-  - **Prevent Windows To Go from accessing internal disks**
-  - **Remove requirement for an online Microsoft account**
-  - **Create a local account using username:** e.g. `apcheck`
-  - **Disable BitLocker automatic device encryption**
+- After *Start*, Rufus shows the "Windows User Experience" dialog:
+
+  | Option | Setting |
+  |---|---|
+  | Prevent Windows To Go from accessing internal disks | ✅ on — the PC's own disk stays untouched |
+  | Remove requirement for an online Microsoft account | ✅ on |
+  | Create a local account with username | ✅ on, e.g. `apcheck` |
+  | Set regional options to the same values as this user's | ☐ off |
+  | Disable data collection (Skip privacy questions) | ✅ on |
+  | QoL improvements (Don't force Copilot, OneDrive, Outlook, Fast Startup, etc.) | ✅ on |
+  | Use 'Windows CA 2023' signed bootloaders (Requires a compatible target PC) | ☐ off — older PCs without the 2023 Secure Boot certificate would not boot the stick |
 
 ## 2. Drivers (on your own PC)
 
