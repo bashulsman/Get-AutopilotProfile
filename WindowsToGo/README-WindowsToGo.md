@@ -100,9 +100,9 @@ The check asks Windows for a fresh device ticket and, when the marker is missing
 
 ## Switching PCs: stale data
 
-The check uses the **AutopilotMarker** and **serial number** from `HKLM\SOFTWARE\Microsoft\Provisioning\HardwareInfo`, plus SYSTEM's MSA **device ticket**. If these still belong to a previous PC, `Get-AutopilotProfile.ps1` reports **Unknown** ("Cached hardware info belongs to another device"). So you never see a wrong tenant.
+The check uses the **AutopilotMarker** and **serial number** from `HKLM\SOFTWARE\Microsoft\Provisioning\HardwareInfo`, plus a fresh MSA **device ticket** it requests from Windows. When `HardwareInfo` is missing or its serial is another PC's, `Get-AutopilotProfile.ps1` clears it and starts Windows' `DetectHardwareChange` task, which rebuilds it (with the marker) for the PC the stick is booted on. Only if that fails does it report **Unknown** ("Cached hardware info belongs to another device"), so you never see a wrong tenant.
 
-Tested on an Entra-joined PC: after clearing, Windows re-created `HardwareInfo` within seconds, with the **same** marker. The marker is therefore derived from the hardware, so on the stick I expect it to be rebuilt correctly per PC. **Test this on two different PCs** before putting the stick into use.
+Tested with one stick on two laptops (HP ProBook 440 G8 and a second laptop): each got its own marker and its own tenant.
 
 ### Clean start: `Reset-AutopilotProbeState.ps1`
 

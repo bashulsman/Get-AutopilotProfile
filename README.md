@@ -75,7 +75,7 @@ In a deployment task sequence (where the step already runs as SYSTEM) it sets ta
 
 ### Run it from a USB stick (Windows To Go)
 
-The `WindowsToGo\` folder contains everything to boot any PC from a Rufus-made Windows To Go stick and run the check automatically after logon — stick preparation, auto-start, and a reset script. See [WindowsToGo/README-WindowsToGo.md](WindowsToGo/README-WindowsToGo.md) (Dutch).
+The `WindowsToGo\` folder contains everything to boot any PC from a Rufus-made Windows To Go stick and run the check automatically after logon — stick preparation, auto-start, and a reset script. See [WindowsToGo/README-WindowsToGo.md](WindowsToGo/README-WindowsToGo.md).
 
 ### Files
 
@@ -84,7 +84,7 @@ The `WindowsToGo\` folder contains everything to boot any PC from a Rufus-made W
 | `Get-AutopilotProfile.ps1` | The check. Self-elevates to SYSTEM if started as a normal admin; `-Gui` shows a window. |
 | `Run-AutopilotCheck.ps1` | Downloads PsExec if needed and runs the check as SYSTEM (GUI by default). |
 | `PsExec.exe`, `PsExec64.exe` | Sysinternals PsExec, used by the runner. |
-| `WindowsToGo\` | Windows To Go stick: `Prepare-WtgStick.ps1`, `Install-WtgAutopilotCheck.ps1`, `Start-AutopilotCheck.ps1`, `Reset-AutopilotProbeState.ps1`. |
+| `WindowsToGo\` | Windows To Go stick: preparation, auto-start, drivers, UWF and diagnostics. Full list in [WindowsToGo/README-WindowsToGo.md](WindowsToGo/README-WindowsToGo.md). |
 | `Readme.md` | This file. |
 
 ---
@@ -141,7 +141,7 @@ Both headers are required. With only the token you get `{"ErrorCode":908,"ErrorR
 
 ### Stale-hardware guard
 
-Before calling the service, the script compares the cached `HardwareInfo\SerialNumber` with the live BIOS serial. If they differ — e.g. a Windows To Go stick or a disk moved to another PC still carrying the previous device's marker — it returns **Unknown** with *"Cached hardware info belongs to another device"* instead of reporting the other device's tenant.
+Before calling the service, the script compares the cached `HardwareInfo\SerialNumber` with the live BIOS serial. If they differ — e.g. a Windows To Go stick or a disk moved to another PC still carrying the previous device's marker — it clears `HardwareInfo` and lets Windows rebuild it for this PC (see *Missing marker* below). Only if the serial still does not match afterwards does it return **Unknown** with *"Cached hardware info belongs to another device"*, so it never reports the other device's tenant.
 
 ---
 
@@ -150,7 +150,7 @@ Before calling the service, the script compares the cached `HardwareInfo\SerialN
 | Phase / environment | Works? | Why |
 |---|---|---|
 | **Running, provisioned Windows** (desktop session) | ✅ | Device ticket present, DPAPI master keys available, marker in registry |
-| **Windows To Go stick** | ⚠️ | Should work once the marker/ticket match the PC it is booted on; to be verified on real hardware. See `WindowsToGo\` |
+| **Windows To Go stick** | ✅ | Fresh device ticket from Windows; the marker is (re)built per PC via `DetectHardwareChange`. Tested on two different laptops from one stick. See `WindowsToGo\` |
 | **Windows OOBE** | ❌ | The ticket exists but DPAPI can't decrypt it in the OOBE state ("Key not valid for use in specified state") |
 | **WinPE** | ❌ | No `wlidsvc`, so no device ticket; and the Platform Crypto Provider / TPM crypto stack isn't usable |
 | **Audit mode (fresh install)** | ⚠️ | The device ticket is usually not minted yet |
@@ -163,7 +163,7 @@ The cached MSA device ticket in the registry **expires** (hours, not days); send
 
 ### Missing marker: DetectHardwareChange
 
-If `HardwareInfo\AutopilotMarker` is missing (OOBE never reached Autopilot, e.g. it had no internet — typical for a Rufus Windows To Go stick) or belongs to another serial number, the script enables and starts Windows' own task `\Microsoft\Windows\Management\Autopilot\DetectHardwareChange`, which rebuilds `HardwareInfo` including the marker, and waits up to 60 s for it.
+If `HardwareInfo\AutopilotMarker` is missing (OOBE never reached Autopilot, e.g. it had no internet — typical for a Rufus Windows To Go stick) or belongs to another serial number, the script enables and starts Windows' own task `\Microsoft\Windows\Management\Autopilot\DetectHardwareChange`, which rebuilds `HardwareInfo` including the marker, and waits up to 60 s for it. The task only fills an **empty** `HardwareInfo`, so for another PC's values the script first clears `HardwareInfo` and the task's cached hash (`C:\Windows\ServiceState\wmansvc\CachedHash.txt`, `CachedTpmEkPub.txt`).
 
 ---
 
