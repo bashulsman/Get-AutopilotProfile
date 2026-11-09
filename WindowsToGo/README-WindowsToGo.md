@@ -21,6 +21,7 @@ Want a read-only stick that starts clean on every boot, with a separate writable
 
 - A **fast** USB stick/SSD of ≥ 64 GB (a USB 3.x SSD is strongly recommended)
 - A Windows 11 Enterprise/Pro ISO
+- **USB SSD not listed in Rufus?** Rufus hides USB hard drives/SSDs by default. Press **Alt+F** in Rufus to list them, or open *Show advanced drive properties* and tick **List USB Hard Drives**. Double-check you picked the stick: Rufus wipes the whole disk.
 - Rufus → *Image option*: **Windows To Go**
 - In the "Windows User Experience" dialog, tick:
   - **Prevent Windows To Go from accessing internal disks**
