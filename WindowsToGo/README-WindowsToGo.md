@@ -80,6 +80,15 @@ The script finds the stick's Windows partition by itself: a USB disk with a Wind
 
 Run the script again to put a newer version of the tool on the stick.
 
+**Optional, for a read-only stick (recommended):**
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\WindowsToGo\Prepare-WtgStick.ps1 -DataPartitionGB 100 -EnableUwf
+```
+
+- `-DataPartitionGB 100` shrinks the Windows partition by 100 GB and creates an NTFS partition `DATA` in that space (on the stick it becomes `D:`, the logs go to `D:\AutopilotProbe`). Without this option no DATA partition is made. Skipped if the stick already has a `DATA` partition.
+- `-EnableUwf` turns on the Unified Write Filter, so `C:` starts clean on every boot. See [README-UWF.md](README-UWF.md).
+
 ## 4. First boot of the stick
 
 1. Boot a PC from the stick (F12/boot menu; Secure Boot can stay on) and finish the first setup.
