@@ -57,7 +57,7 @@ try {
     # --- Logon task: any administrator logging on, elevated, in the user's session -------------
     $a = New-ScheduledTaskAction -Execute $psExe -Argument $psArgs
     $t = New-ScheduledTaskTrigger -AtLogOn
-    $t.Delay = 'PT10S'
+    $t.Delay = 'PT3S'     # short: the launcher shows its status window right away
     $s = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 30)
     $p = New-ScheduledTaskPrincipal -GroupId 'S-1-5-32-544' -RunLevel Highest     # BUILTIN\Administrators (language independent)
     Register-ScheduledTask -TaskName 'AutopilotCheck-AtLogon' -Action $a -Trigger $t -Settings $s -Principal $p -Force | Out-Null

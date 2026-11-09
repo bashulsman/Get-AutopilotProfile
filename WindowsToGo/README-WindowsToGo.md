@@ -105,8 +105,10 @@ Installation logs are in `C:\ProgramData\AutopilotProbe\install-*.log`.
 ## 5. Usage
 
 1. Plug the stick into the PC you want to check and boot from it.
-2. Log on (or automatically). After ~10 s the *Waiting for internet* window appears. Plug in a network cable or pick Wi-Fi; the Wi-Fi settings open by themselves.
-3. The result appears in the window (Registered/Not registered/Unknown, with tenant and profile).
+2. Log on (or automatically). A few seconds after the desktop appears, the **status window** opens and stays until the result is there: a moving progress bar, how long it has been busy, and the current step (*Checking the internet connection*, *Waiting for internet*, *Requesting a device ticket*, *Building the Autopilot hardware info*, *Asking Microsoft Autopilot*) with the matching log line.
+   - No network: it says *Waiting for internet*, has a **Wi-Fi settings** button and opens the Wi-Fi settings by itself after 15 s. Plug in a cable or pick Wi-Fi; the check then starts by itself (gives up after 10 minutes).
+   - On the very first boot Windows itself first shows its own "getting things ready" screens; the status window comes after those.
+3. The result appears in its own window (Registered/Not registered/Unknown, with tenant and profile).
 4. To run it again: the **Autopilot check** shortcut on the desktop (asks for UAC).
 
 **Did the check really go online?** Look in `C:\ProgramData\AutopilotProbe\`. Only a run that actually reached the service has an `HTTP <code>` line in `autopilot-*.log` and an `autopilot-*-response.json` file with Microsoft's response.
