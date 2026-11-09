@@ -1,2 +1,5 @@
 # Sysinternals PsExec may not be redistributed; Run-AutopilotCheck.ps1 downloads it on demand
 PsExec*.exe
+
+# OEM driver packs: large and vendor-licensed; fetch with WindowsToGo\Get-WtgDriverPack.ps1
+WindowsToGo/Drivers/

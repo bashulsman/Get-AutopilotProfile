@@ -157,9 +157,13 @@ Before calling the service, the script compares the cached `HardwareInfo\SerialN
 
 In short: this is a check for **devices that are up and running**. It is not a pre-deployment (bare-metal) check from WinPE — at that stage the required inputs don't exist yet. For that, use Microsoft Graph with app or device-code authentication.
 
-### The device ticket is short-lived
+### The device ticket is requested fresh
 
-Even on a running device, the cached MSA device ticket **expires** (hours, not days). When it is present but expired, the service replies **HTTP 401** and the script reports `Unknown`. You don't control when Windows refreshes it — a **reboot** (or sign-out/in) usually mints a fresh one. So treat a successful result as "valid right now," not as something you can rely on being available at any arbitrary moment.
+The cached MSA device ticket in the registry **expires** (hours, not days); sending an expired one gives **HTTP 401**. So the script first asks Windows for a **fresh** device ticket, the same request `Autopilot.dll` makes: `OnlineIdSystemAuthenticator` with application ID `8A6E5826-EA01-989D-989D-158EE04D1518`, service `https://ztd.dds.microsoft.com`, policy `MBI_SSL`. The log then says `Fresh device ticket from Windows`. Only if that fails does it fall back to the cached ticket (`Using cached ticket from ...`).
+
+### Missing marker: DetectHardwareChange
+
+If `HardwareInfo\AutopilotMarker` is missing (OOBE never reached Autopilot, e.g. it had no internet — typical for a Rufus Windows To Go stick) or belongs to another serial number, the script enables and starts Windows' own task `\Microsoft\Windows\Management\Autopilot\DetectHardwareChange`, which rebuilds `HardwareInfo` including the marker, and waits up to 60 s for it.
 
 ---
 

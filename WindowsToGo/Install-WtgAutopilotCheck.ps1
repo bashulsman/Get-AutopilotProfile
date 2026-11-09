@@ -99,3 +99,11 @@ try {
     Write-Host 'Done. The check starts automatically after each logon.'
 }
 finally { Stop-Transcript | Out-Null }
+
+# --- UWF (only when the stick was prepared with Prepare-WtgStick.ps1 -EnableUwf) ------------------
+# Runs after Stop-Transcript: Enable-WtgUwf moves ProgramData\AutopilotProbe to the DATA partition.
+$uwfFlag = Join-Path $Target 'WindowsToGo\enable-uwf.flag'
+if (Test-Path $uwfFlag) {
+    & (Join-Path $Target 'WindowsToGo\Enable-WtgUwf.ps1')
+    Remove-Item $uwfFlag -Force -EA SilentlyContinue
+}

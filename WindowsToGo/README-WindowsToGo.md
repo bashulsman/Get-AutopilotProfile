@@ -10,6 +10,12 @@ A USB stick you boot a PC from to see straight away whether, and in which tenant
 | `Install-WtgAutopilotCheck.ps1` | On the stick (normally automatic) | Creates the logon task, desktop shortcut and power settings |
 | `Start-AutopilotCheck.ps1` | On the stick (automatic after logon) | Waits for internet, then runs `Get-AutopilotProfile.ps1 -Gui` |
 | `Reset-AutopilotProbeState.ps1` | On the stick | Clears the cached marker/ticket/device identity: always a clean start |
+| `Enable-WtgUwf.ps1` | On the stick (automatic with `-EnableUwf`) | DATA partition → D:, logs to D:, UWF tweaks, Unified Write Filter on C: |
+| `Get-WtgDriverPack.ps1` | **Your own PC** | Downloads the official HP/Dell driver pack for a model into `Drivers\<model>` |
+| `Show-MissingDrivers.ps1` | On the stick | Lists devices without a driver (hardware ID, chip vendor) and the PC model/system ID |
+| `Test-WtgAutopilotMarker.ps1` | On the stick, as admin | On "No Autopilot marker": collects the Autopilot state, starts Windows' `DetectHardwareChange` task and checks whether the marker appears |
+
+Want a read-only stick that starts clean on every boot, with a separate writable data partition? See [README-UWF.md](README-UWF.md) (Unified Write Filter).
 
 ## 1. Create the stick with Rufus
 
@@ -22,9 +28,37 @@ A USB stick you boot a PC from to see straight away whether, and in which tenant
   - **Create a local account using username:** e.g. `apcheck`
   - **Disable BitLocker automatic device encryption**
 
-## 2. Prepare the stick (on your own PC)
+## 2. Drivers (on your own PC)
 
-Leave the stick plugged in after Rufus and run, **as administrator**:
+Windows itself only has generic drivers. Wi-Fi in particular is usually missing on laptops, and without network the check cannot run. Put the drivers for the models you want to check in `WindowsToGo\Drivers\`; `Prepare-WtgStick.ps1` injects **every** `.inf` below that folder into the stick. Windows then picks the matching drivers per PC, so one stick can hold drivers for several models.
+
+**HP and Dell:** download the official driver pack per model:
+
+```powershell
+.\WindowsToGo\Get-WtgDriverPack.ps1 -Vendor HP -Model 'ProBook 440 G8' -ListOnly   # show what it would download
+.\WindowsToGo\Get-WtgDriverPack.ps1 -Vendor HP -Model 'ProBook 440 G8'
+.\WindowsToGo\Get-WtgDriverPack.ps1 -Vendor Dell -Model 'Latitude 5420'
+```
+
+It picks the newest Windows 11 x64 pack (falls back to Windows 10), checks the hash from the vendor catalog and the HP/Dell signature, and extracts it to `Drivers\<vendor>-<model>`. If the model name matches several models, use `-SystemId` (see below).
+
+**Other vendors / single drivers:** extract the driver (the folder with `.inf`, `.sys`, `.cat`) into a subfolder of `Drivers\`, e.g. `Drivers\Intel-WiFi-24.80.0`.
+
+**Which driver is missing?** Boot the PC from the stick and run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\AutopilotCheck\WindowsToGo\Show-MissingDrivers.ps1
+```
+
+It shows the model, the system ID for `Get-WtgDriverPack.ps1` and every device without a driver, with its hardware ID and chip vendor (e.g. `PCI\VEN_10EC…` = Realtek Wi-Fi, `PCI\VEN_8086…` = Intel). A copy goes to the log folder.
+
+**No Wi-Fi right now?** Use a USB/USB-C Ethernet adapter or USB tethering from a phone. Both work with drivers built into Windows, so you can run the check without waiting for the right Wi-Fi driver.
+
+The `Drivers` folder is not copied into `X:\AutopilotCheck` (the drivers are already in Windows) and is excluded from git.
+
+## 3. Prepare the stick (on your own PC)
+
+Leave the stick plugged in after Rufus (or plug in a stick you already used) and run, **as administrator**:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\WindowsToGo\Prepare-WtgStick.ps1
@@ -32,13 +66,14 @@ powershell -ExecutionPolicy Bypass -File .\WindowsToGo\Prepare-WtgStick.ps1
 
 The script finds the stick's Windows partition by itself: a USB disk with a Windows installation that is not your own system drive. If it finds more than one, or the partition has no drive letter, pass `-DriveLetter E`. **Nothing is formatted.** The script:
 
+- injects all drivers from `WindowsToGo\Drivers\` with `DISM /Add-Driver /Recurse` (skip with `-SkipDrivers`). This also works on a stick that was already booted: you do **not** need to recreate it. Windows installs them at the next boot.
 - copies the tool to `X:\AutopilotCheck` (a clean copy every time)
 - adds a line to `X:\Windows\Setup\Scripts\SetupComplete.cmd` that starts the installation
 - puts `Install Autopilot check.cmd` on the Public desktop as a fallback
 
 Run the script again to put a newer version of the tool on the stick.
 
-## 3. First boot of the stick
+## 4. First boot of the stick
 
 1. Boot a PC from the stick (F12/boot menu; Secure Boot can stay on) and finish the first setup.
 2. Normally `SetupComplete.cmd` installs the tool by itself.
@@ -51,7 +86,7 @@ Run the script again to put a newer version of the tool on the stick.
 
 Installation logs are in `C:\ProgramData\AutopilotProbe\install-*.log`.
 
-## 4. Usage
+## 5. Usage
 
 1. Plug the stick into the PC you want to check and boot from it.
 2. Log on (or automatically). After ~10 s the *Waiting for internet* window appears. Plug in a network cable or pick Wi-Fi; the Wi-Fi settings open by themselves.
@@ -60,7 +95,7 @@ Installation logs are in `C:\ProgramData\AutopilotProbe\install-*.log`.
 
 **Did the check really go online?** Look in `C:\ProgramData\AutopilotProbe\`. Only a run that actually reached the service has an `HTTP <code>` line in `autopilot-*.log` and an `autopilot-*-response.json` file with Microsoft's response.
 
-On **HTTP 401** (ticket expired) or **"No device ticket"**, reboot the PC from the stick, with network, and try again.
+The check asks Windows for a fresh device ticket and, when the marker is missing (always the case on a Rufus stick, because its OOBE never reached Autopilot), starts Windows' `DetectHardwareChange` task to create it. Still **"No Autopilot marker"**? Run `Test-WtgAutopilotMarker.ps1` as administrator and look at its report. Still **HTTP 401** or **"No device ticket"**? Reboot the PC from the stick, with network, and try again.
 
 ## Switching PCs: stale data
 

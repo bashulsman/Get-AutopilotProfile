@@ -72,27 +72,73 @@ function Invoke-Check {
             } }
             return $null
         }
-        $base='HKU:\S-1-5-18\SOFTWARE\Microsoft\IdentityCRL\Immersive\production\Token'
-        $dds="$base\{8A6E5826-EA01-989D-989D-158EE04D1518}"
-        $ticket=$null
-        $keys=@(); if(Test-Path $dds){$keys+=Get-Item $dds}
-        if(Test-Path $base){$keys+=Get-ChildItem $base -EA SilentlyContinue | Where-Object { $_.PSChildName -ne '{8A6E5826-EA01-989D-989D-158EE04D1518}' }}
-        foreach($k in $keys){ $pp=Get-ItemProperty $k.PSPath -EA SilentlyContinue; if($pp.DeviceTicket){ $ticket=Get-Jwt ([byte[]]$pp.DeviceTicket); if($ticket){break} } }
+        # 1) Fresh ticket: ask Windows (wlidsvc) for an MSA device ticket for the Autopilot service, the
+        #    same request Autopilot.dll makes (app ID 8A6E5826-..., target https://ztd.dds.microsoft.com,
+        #    policy MBI_SSL). Avoids HTTP 401 from an expired cached ticket, and works on a device whose
+        #    OOBE never contacted Autopilot (e.g. a Rufus Windows To Go stick).
+        function Get-FreshTicket {
+            try {
+                Add-Type -AssemblyName System.Runtime.WindowsRuntime
+                $null = [Windows.Security.Authentication.OnlineId.OnlineIdSystemAuthenticator, Windows.Security.Authentication.OnlineId, ContentType = WindowsRuntime]
+                $asTask = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' } | Select-Object -First 1
+                $auth = [Windows.Security.Authentication.OnlineId.OnlineIdSystemAuthenticator]::Default
+                $auth.ApplicationId = [Guid]'8A6E5826-EA01-989D-989D-158EE04D1518'
+                $tr = New-Object Windows.Security.Authentication.OnlineId.OnlineIdServiceTicketRequest('https://ztd.dds.microsoft.com', 'MBI_SSL')
+                $tk = $asTask.MakeGenericMethod([Windows.Security.Authentication.OnlineId.OnlineIdSystemTicketResult]).Invoke($null, @($auth.GetTicketAsync($tr)))
+                if (-not $tk.Wait(30000)) { Log 'Fresh ticket: no answer from Windows within 30 s'; return $null }
+                $res = $tk.Result
+                if ("$($res.Status)" -eq 'Success' -and $res.Identity.Ticket.Value) { Log "Fresh device ticket from Windows (device ID $($res.Identity.Id))"; return $res.Identity.Ticket.Value }
+                Log "Fresh ticket: status $($res.Status), error $($res.ExtendedError) $($res.Identity.Ticket.ErrorCode)"
+            } catch { Log "Fresh ticket: $($_.Exception.Message)" }
+            return $null
+        }
+        $ticket = Get-FreshTicket
 
-        $hwInfo=Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Provisioning\HardwareInfo' -EA SilentlyContinue
+        # 2) Fallback: the cached ticket in SYSTEM's registry (may be expired -> HTTP 401)
+        if (-not $ticket) {
+            $base='HKU:\S-1-5-18\SOFTWARE\Microsoft\IdentityCRL\Immersive\production\Token'
+            $dds="$base\{8A6E5826-EA01-989D-989D-158EE04D1518}"
+            $keys=@(); if(Test-Path $dds){$keys+=Get-Item $dds}
+            if(Test-Path $base){$keys+=Get-ChildItem $base -EA SilentlyContinue | Where-Object { $_.PSChildName -ne '{8A6E5826-EA01-989D-989D-158EE04D1518}' }}
+            foreach($k in $keys){ $pp=Get-ItemProperty $k.PSPath -EA SilentlyContinue; if($pp.DeviceTicket){ $ticket=Get-Jwt ([byte[]]$pp.DeviceTicket); if($ticket){ Log "Using cached ticket from $($k.PSChildName)"; break} } }
+        }
+
+        $hwKey='HKLM:\SOFTWARE\Microsoft\Provisioning\HardwareInfo'
+        $hwInfo=Get-ItemProperty $hwKey -EA SilentlyContinue
+        $live=if ($r.SerialNumber) { $r.SerialNumber.Trim() } else { $null }
+        $staleHw={ param($h) $h.SerialNumber -and $live -and ($h.SerialNumber.Trim() -ne $live) }
+
+        # No marker yet (OOBE never reached Autopilot, e.g. a Rufus stick), or cached for another PC:
+        # let Windows (re)build HardwareInfo with its own task. On such devices the task is disabled.
+        if (-not $hwInfo.AutopilotMarker -or (& $staleHw $hwInfo)) {
+            $tp='\Microsoft\Windows\Management\Autopilot\'
+            $t=Get-ScheduledTask -TaskPath $tp -TaskName 'DetectHardwareChange' -EA SilentlyContinue
+            if ($t) {
+                Log "Marker missing or stale - starting DetectHardwareChange (task was $($t.State))"
+                try {
+                    if ($t.State -eq 'Disabled') { Enable-ScheduledTask -TaskPath $tp -TaskName 'DetectHardwareChange' -EA Stop | Out-Null }
+                    Start-ScheduledTask -TaskPath $tp -TaskName 'DetectHardwareChange' -EA Stop
+                    for ($i=0; $i -lt 30; $i++) {
+                        Start-Sleep 2
+                        $hwInfo=Get-ItemProperty $hwKey -EA SilentlyContinue
+                        if ($hwInfo.AutopilotMarker -and -not (& $staleHw $hwInfo)) { break }
+                    }
+                } catch { Log "DetectHardwareChange: $($_.Exception.Message)" }
+            } else { Log 'DetectHardwareChange task not found' }
+        }
         $marker=$hwInfo.AutopilotMarker
         Log ("Ticket present: {0}  Marker: {1}  Cached serial: {2}  Live serial: {3}" -f [bool]$ticket, $marker, $hwInfo.SerialNumber, $r.SerialNumber)
 
         # Stale-hardware guard (e.g. Windows To Go / a disk moved to another PC): the marker is cached
         # for the hardware Windows was provisioned on. If that is not this PC, the answer would be about
         # the OTHER device - refuse instead of returning a misleading result.
-        if ($hwInfo.SerialNumber -and $r.SerialNumber -and ($hwInfo.SerialNumber.Trim() -ne $r.SerialNumber.Trim())) {
+        if (& $staleHw $hwInfo) {
             $r.Detail="Cached hardware info belongs to another device (serial $($hwInfo.SerialNumber), this PC is $($r.SerialNumber)). The Autopilot marker/ticket are stale, so no reliable result for this PC."
             Log $r.Detail; return $r
         }
 
         if (-not $ticket) { $r.Detail='No device ticket. Run as SYSTEM on a running Windows (not WinPE/OOBE), with network.'; Log $r.Detail; return $r }
-        if (-not $marker) { $r.Detail='No Autopilot marker (HardwareInfo\AutopilotMarker). Device may never have been Autopilot-provisioned.'; Log $r.Detail; return $r }
+        if (-not $marker) { $r.Detail='No Autopilot marker (HardwareInfo\AutopilotMarker), also not after running DetectHardwareChange. Check internet and run WindowsToGo\Test-WtgAutopilotMarker.ps1.'; Log $r.Detail; return $r }
 
         $client=New-Object Net.Http.HttpClient; $client.Timeout=[TimeSpan]::FromSeconds(30)
         $req=New-Object Net.Http.HttpRequestMessage([Net.Http.HttpMethod]::Get,$Url)
@@ -115,7 +161,7 @@ function Invoke-Check {
             $r.Status='NotRegistered'; $r.ExitCode=1; Log 'NOT registered in Autopilot (807).'
         }
         elseif ([int]$resp.StatusCode -eq 401) {
-            $r.Detail='Device ticket present but rejected (HTTP 401) - it has most likely expired. Reboot (or sign out/in) to refresh it, then retry.'
+            $r.Detail='Device ticket rejected (HTTP 401). Windows could not supply a fresh ticket (see log); reboot with internet, then retry.'
             Log $r.Detail
         }
         else { $r.Detail="Unexpected response (HTTP $([int]$resp.StatusCode))."; Log "$($r.Detail) $body" }
@@ -188,12 +234,12 @@ $ps   = Join-Path $PSHOME 'powershell.exe'
 $arg  = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$PSCommandPath`" -DoCheck -OutDir `"$OutDir`""
 try {
     $a = New-ScheduledTaskAction -Execute $ps -Argument $arg
-    $s = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 3)
+    $s = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 4)
     Register-ScheduledTask -TaskName $task -Action $a -Settings $s -User 'NT AUTHORITY\SYSTEM' -RunLevel Highest -Force | Out-Null
     Start-ScheduledTask -TaskName $task
 } catch { Log "Task error: $($_.Exception.Message)" }
 
-$deadline = (Get-Date).AddSeconds(120)
+$deadline = (Get-Date).AddSeconds(180)     # ticket (30 s) + DetectHardwareChange (60 s) + HTTP (30 s)
 while ((Get-Date) -lt $deadline -and -not (Test-Path $ResultFile)) { Start-Sleep 2 }
 Unregister-ScheduledTask -TaskName $task -Confirm:$false -ErrorAction SilentlyContinue
 

@@ -10,10 +10,12 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$ToolDir = (Split-Path $PSScriptRoot -Parent),
+    [string]$ToolDir,                # default: parent of this script's folder
     [int]$NetworkTimeoutSec = 600
 )
 
+# $PSScriptRoot is empty inside param() defaults in Windows PowerShell 5.1 - resolve it here
+if (-not $ToolDir) { $ToolDir = Split-Path $PSScriptRoot -Parent }
 $script = Join-Path $ToolDir 'Get-AutopilotProfile.ps1'
 if (-not (Test-Path $script)) { $script = Join-Path $PSScriptRoot 'Get-AutopilotProfile.ps1' }
 
