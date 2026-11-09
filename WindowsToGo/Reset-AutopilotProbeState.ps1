@@ -15,11 +15,12 @@
       HKU\S-1-5-18\SOFTWARE\Microsoft\IdentityCRL\DeviceIdentities             (MSA device identity)
       HKU\S-1-5-18\SOFTWARE\Microsoft\IdentityCRL\StoredIdentities
     (-KeepDeviceIdentity leaves the last two alone.)
+      C:\Windows\ServiceState\wmansvc\CachedHash.txt, CachedTpmEkPub.txt       (hash cached by DetectHardwareChange)
 
-    Afterwards wlidsvc is restarted. Reboot the PC (with network) before running the check again.
-
-    NOTE: whether Windows re-creates HardwareInfo\AutopilotMarker outside OOBE is NOT verified. If it
-    does not, the check reports "No Autopilot marker" (Unknown) - never a wrong tenant.
+    Afterwards wlidsvc is restarted. Get-AutopilotProfile.ps1 then rebuilds HardwareInfo (incl. the
+    marker) by starting Windows' DetectHardwareChange task, and requests a fresh device ticket.
+    Get-AutopilotProfile.ps1 also clears HardwareInfo by itself when its serial is another PC's, so
+    this script is only needed for a full clean start.
 
     Safety: refuses (exit 3, nothing changed) on a device that is Entra joined, AD domain joined or
     Intune/MDM enrolled, unless -Force is given. The stick (local account) is none of these.
@@ -118,6 +119,11 @@ foreach ($t in $targets) {
     }
     $left = if ($t.Mode -eq 'Values') { @((Get-Item $ps).Property).Count } else { @(Get-ChildItem $ps -EA SilentlyContinue).Count }
     Log ("Cleared ({0}): {1}{2}" -f $t.Mode, $t.Path, $(if ($left) { "  - WARNING: $left item(s) could not be removed" }))
+}
+
+# Hardware hash cached by the DetectHardwareChange task (it compares against it)
+foreach ($f in "$env:windir\ServiceState\wmansvc\CachedHash.txt", "$env:windir\ServiceState\wmansvc\CachedTpmEkPub.txt") {
+    if ((Test-Path $f) -and $PSCmdlet.ShouldProcess($f, 'Delete')) { Remove-Item $f -Force -EA SilentlyContinue; Log "Deleted: $f" }
 }
 
 Restart-Service wlidsvc -Force -EA SilentlyContinue

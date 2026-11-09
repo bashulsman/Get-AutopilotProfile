@@ -116,6 +116,14 @@ function Invoke-Check {
             if ($t) {
                 Log "Marker missing or stale - starting DetectHardwareChange (task was $($t.State))"
                 try {
+                    if (& $staleHw $hwInfo) {
+                        # The task leaves another PC's values in place (tested), but rebuilds an EMPTY
+                        # HardwareInfo for the current hardware. The serial mismatch proves the values
+                        # are not this PC's, so clear them and the task's cached hash first.
+                        Log "Clearing stale HardwareInfo (serial $($hwInfo.SerialNumber)) and the cached hardware hash"
+                        foreach ($n in (Get-Item $hwKey).GetValueNames()) { Remove-ItemProperty $hwKey -Name $n -Force -EA SilentlyContinue }
+                        Remove-Item "$env:windir\ServiceState\wmansvc\CachedHash.txt", "$env:windir\ServiceState\wmansvc\CachedTpmEkPub.txt" -Force -EA SilentlyContinue
+                    }
                     if ($t.State -eq 'Disabled') { Enable-ScheduledTask -TaskPath $tp -TaskName 'DetectHardwareChange' -EA Stop | Out-Null }
                     Start-ScheduledTask -TaskPath $tp -TaskName 'DetectHardwareChange' -EA Stop
                     for ($i=0; $i -lt 30; $i++) {
